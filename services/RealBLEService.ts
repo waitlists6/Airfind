@@ -3,16 +3,32 @@ import { Platform, PermissionsAndroid, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BLEDevice } from '@/types/ble';
 
+// Mock BLE Manager for web platform
+class MockBleManager {
+  onStateChange() {}
+  state() { return Promise.resolve('PoweredOff'); }
+  startDeviceScan() {}
+  stopDeviceScan() {}
+  connectToDevice() { return Promise.reject(new Error('BLE not available on web')); }
+  cancelDeviceConnection() { return Promise.resolve(); }
+  connectedDevices() { return Promise.resolve([]); }
+  destroy() {}
+}
+
 export class RealBLEService {
   private static instance: RealBLEService;
-  private bleManager: BleManager;
+  private bleManager: BleManager | MockBleManager;
   private isScanning: boolean = false;
   private discoveredDevices: Map<string, BLEDevice> = new Map();
   private scanSubscription: any = null;
   private onDeviceFoundCallback?: (device: BLEDevice) => void;
 
   private constructor() {
-    this.bleManager = new BleManager();
+    if (Platform.OS === 'web') {
+      this.bleManager = new MockBleManager();
+    } else {
+      this.bleManager = new BleManager();
+    }
     this.setupBleManager();
   }
 
@@ -38,6 +54,10 @@ export class RealBLEService {
   }
 
   async requestPermissions(): Promise<boolean> {
+    if (Platform.OS === 'web') {
+      return false; // BLE not available on web
+    }
+    
     try {
       if (Platform.OS === 'android') {
         const granted = await PermissionsAndroid.requestMultiple([
@@ -60,6 +80,10 @@ export class RealBLEService {
   }
 
   async startScanning(onDeviceFound: (device: BLEDevice) => void): Promise<void> {
+    if (Platform.OS === 'web') {
+      throw new Error('Bluetooth scanning is not available on web platform');
+    }
+    
     if (this.isScanning) {
       console.log('Already scanning');
       return;
